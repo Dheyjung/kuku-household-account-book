@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const CATEGORIES = [
   { name: "식비", emoji: "🍙", color: "var(--pink)" },
@@ -37,12 +38,27 @@ function dateLabel(s: string) {
 
 export default function Home() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [place, setPlace] = useState("");
   const [category, setCategory] = useState<string>(CATEGORIES[0].name);
   const [date, setDate] = useState(todayStr);
   const [memo, setMemo] = useState("");
+
+  useEffect(() => {
+    supabase
+      .from("expenses")
+      .select("id, amount, place, category, date, memo")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) setError("불러오지 못했어요: " + error.message);
+        else setExpenses(data);
+        setLoading(false);
+      });
+  }, []);
 
   const monthPrefix = todayStr().slice(0, 7);
   const monthNumber = Number(monthPrefix.slice(5));
@@ -68,17 +84,30 @@ export default function Home() {
     setOpen(true);
   }
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
-    setExpenses((prev) => [
-      ...prev,
-      { id: Date.now(), amount: Number(amount), place: place.trim(), category, date, memo: memo.trim() },
-    ]);
+    const { data, error } = await supabase
+      .from("expenses")
+      .insert({ amount: Number(amount), place: place.trim(), category, date, memo: memo.trim() })
+      .select("id, amount, place, category, date, memo")
+      .single();
+    if (error) {
+      setError("저장하지 못했어요: " + error.message);
+      return;
+    }
+    setError("");
+    setExpenses((prev) => [...prev, data]);
     setOpen(false);
   }
 
-  function remove(id: number) {
+  async function remove(id: number) {
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) {
+      setError("삭제하지 못했어요: " + error.message);
+      return;
+    }
+    setError("");
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }
 
@@ -90,7 +119,14 @@ export default function Home() {
         <div className="hero-total">{won(monthTotal)}</div>
       </header>
 
-      {groups.length === 0 ? (
+      {error && <div className="error">{error}</div>}
+
+      {loading ? (
+        <div className="empty">
+          <div className="empty-emoji">⏳</div>
+          <p>불러오는 중...</p>
+        </div>
+      ) : groups.length === 0 ? (
         <div className="empty">
           <div className="empty-emoji">🐣</div>
           <p>아직 쓴 돈이 없어요!</p>
