@@ -26,6 +26,18 @@ const CIRC = 2 * Math.PI * R;
 
 const won = (n: number) => n.toLocaleString("ko-KR") + "원";
 
+async function shrink(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("resize failed"))), "image/jpeg", 0.85),
+  );
+}
+
 function todayStr() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -49,6 +61,8 @@ export default function Home() {
   const [category, setCategory] = useState<string>(CATEGORIES[0].name);
   const [date, setDate] = useState(todayStr);
   const [memo, setMemo] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
 
   useEffect(() => {
     supabase
@@ -91,7 +105,40 @@ export default function Home() {
     setCategory(CATEGORIES[0].name);
     setDate(todayStr());
     setMemo("");
+    setScanMsg("");
     setOpen(true);
+  }
+
+  async function scanReceipt(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    ev.target.value = "";
+    if (!file) return;
+    setScanning(true);
+    setScanMsg("");
+    try {
+      const body = new FormData();
+      body.append("image", await shrink(file), "receipt.jpg");
+      const res = await fetch("/api/receipt", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAmount(data.amount ? String(data.amount) : "");
+      setPlace(data.place ?? "");
+      setDate(data.date ?? "");
+      const missing = [
+        !data.amount && "금액",
+        !data.place && "사용처",
+        !data.date && "날짜",
+      ].filter(Boolean);
+      setScanMsg(
+        missing.length
+          ? `${missing.join(", ")} 항목은 읽지 못했어요. 직접 입력해 주세요. 읽은 값도 꼭 확인해 주세요!`
+          : "영수증에서 읽어왔어요. 내용을 확인하고 저장해 주세요!",
+      );
+    } catch (e) {
+      setScanMsg(e instanceof Error && e.message ? e.message : "영수증을 읽지 못했어요. 직접 입력해 주세요");
+    } finally {
+      setScanning(false);
+    }
   }
 
   async function save(e: React.FormEvent) {
@@ -236,6 +283,12 @@ export default function Home() {
         <div className="overlay" onClick={() => setOpen(false)}>
           <form className="sheet" onClick={(ev) => ev.stopPropagation()} onSubmit={save}>
             <div className="sheet-title">💸 지출 기록하기</div>
+
+            <label className={"scan" + (scanning ? " busy" : "")}>
+              {scanning ? "⏳ 영수증 읽는 중..." : "📷 영수증으로 채우기"}
+              <input type="file" accept="image/*" onChange={scanReceipt} disabled={scanning} hidden />
+            </label>
+            {scanMsg && <div className="scan-msg">{scanMsg}</div>}
 
             <label>
               금액

@@ -378,3 +378,28 @@ input:focus {
   width: 100%;
   flex: none;
 }
+
+.scan {
+  align-items: center;
+  background: var(--sky);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 11px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.scan.busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+.scan-msg {
+  background: #fff;
+  border: 2.5px dashed var(--ink);
+  border-radius: 16px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
