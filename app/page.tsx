@@ -21,6 +21,9 @@ type Expense = {
   memo: string;
 };
 
+const R = 15.5;
+const CIRC = 2 * Math.PI * R;
+
 const won = (n: number) => n.toLocaleString("ko-KR") + "원";
 
 function todayStr() {
@@ -65,6 +68,13 @@ export default function Home() {
   const monthTotal = expenses
     .filter((e) => e.date.startsWith(monthPrefix))
     .reduce((sum, e) => sum + e.amount, 0);
+
+  const stats = CATEGORIES.map((c) => ({
+    ...c,
+    total: expenses
+      .filter((e) => e.date.startsWith(monthPrefix) && e.category === c.name)
+      .reduce((sum, e) => sum + e.amount, 0),
+  })).filter((c) => c.total > 0);
 
   const groups = Object.entries(
     expenses.reduce<Record<string, Expense[]>>((acc, e) => {
@@ -118,6 +128,56 @@ export default function Home() {
         <div className="hero-label">{monthNumber}월에 쓴 돈</div>
         <div className="hero-total">{won(monthTotal)}</div>
       </header>
+
+      {monthTotal > 0 && (
+        <section className="stats">
+          <div className="stats-title">카테고리별 지출</div>
+          <div className="stats-body">
+            <svg viewBox="0 0 42 42" className="donut" role="img" aria-label="카테고리별 지출 원그래프">
+              <circle cx="21" cy="21" r={R} fill="none" strokeWidth="9" stroke="#f1e4ee" />
+              {
+                stats.reduce<{ offset: number; nodes: React.ReactNode[] }>(
+                  (acc, c) => {
+                    const len = (c.total / monthTotal) * CIRC;
+                    acc.nodes.push(
+                      <circle
+                        key={c.name}
+                        cx="21"
+                        cy="21"
+                        r={R}
+                        fill="none"
+                        strokeWidth="9"
+                        style={{ stroke: c.color }}
+                        strokeDasharray={`${len} ${CIRC - len}`}
+                        strokeDashoffset={-acc.offset}
+                        transform="rotate(-90 21 21)"
+                      />,
+                    );
+                    acc.offset += len;
+                    return acc;
+                  },
+                  { offset: 0, nodes: [] },
+                ).nodes
+              }
+              <circle cx="21" cy="21" r="12.5" fill="none" stroke="var(--ink)" strokeWidth="0.6" />
+              <circle cx="21" cy="21" r="20" fill="none" stroke="var(--ink)" strokeWidth="0.6" />
+            </svg>
+            <ul className="legend">
+              {[...stats]
+                .sort((a, b) => b.total - a.total)
+                .map((c) => (
+                  <li key={c.name}>
+                    <span className="dot" style={{ background: c.color }} />
+                    <span className="legend-name">
+                      {c.emoji} {c.name}
+                    </span>
+                    <span className="legend-pct">{Math.round((c.total / monthTotal) * 100)}%</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {error && <div className="error">{error}</div>}
 
